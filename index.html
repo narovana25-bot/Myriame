@@ -1299,6 +1299,19 @@ body.dark-mode{background:#050d19!important;color:#eef4ff!important}
 </head>
 
 <body>
+<script>
+/* Load the last downloaded HTML as a whole document without duplicating the page. */
+(function(){
+  const CACHE_KEY='numRehetraUpdatedHTML';
+  try{
+    const cached=localStorage.getItem(CACHE_KEY);
+    if(cached && location.protocol !== 'blob:'){
+      const blob=new Blob([cached],{type:'text/html;charset=UTF-8'});
+      location.replace(URL.createObjectURL(blob));
+    }
+  }catch(e){ console.warn('Cache HTML:',e); }
+})();
+</script>
 <div class="side-overlay" id="sideOverlay"></div>
 <aside class="side-menu" id="sideMenu" aria-label="Menu principal">
   <div class="side-menu-head"><div><strong>Menu</strong><small>Fiangonana Ambodiadabo</small></div><button id="closeMenu" aria-label="Hidio">×</button></div>
@@ -1449,28 +1462,9 @@ function downloadUpdate(event) {
         localStorage.setItem(CACHE_KEY, html);
         if (label) label.textContent = 'Mise à jour effectuée ✓';
         setTimeout(() => {
-          // Aza mampiasa document.write(): mety hampiditra pejy indroa ao amin'ny WebView.
-          // Soloina mivantana ny document amin'ny version vaovao ary averina alefa ireo scripts inline.
-          try {
-            const parser = new DOMParser();
-            const parsed = parser.parseFromString(html, 'text/html');
-            if (!parsed.documentElement || !parsed.body) throw new Error('HTML tsy mety');
-
-            document.documentElement.replaceWith(parsed.documentElement.cloneNode(true));
-
-            // Re-run inline/external scripts satria tsy exécuté ny script rehefa cloneNode.
-            const scripts = Array.from(document.querySelectorAll('script'));
-            scripts.forEach(oldScript => {
-              const newScript = document.createElement('script');
-              for (const attr of oldScript.attributes) newScript.setAttribute(attr.name, attr.value);
-              newScript.textContent = oldScript.textContent;
-              oldScript.replaceWith(newScript);
-            });
-          } catch (e) {
-            console.error('Reload HTML:', e);
-            // Fallback: avereno ny pejy; ny version voatahiry dia mbola ao localStorage.
-            location.reload();
-          }
+          /* Manolo tanteraka ny pejy vaovao; tsy ampidirina ao amin'ilay taloha. */
+          const blob = new Blob([html], {type:'text/html;charset=UTF-8'});
+          location.replace(URL.createObjectURL(blob));
         }, 350);
       })
       .catch(err => {
