@@ -1299,23 +1299,6 @@ body.dark-mode{background:#050d19!important;color:#eef4ff!important}
 </head>
 
 <body>
-<script>
-/* Petit système de mise à jour HTML — tsy manolo APK */
-(function(){
-  const CACHE_KEY='numRehetraUpdatedHTML';
-  const LOADED_KEY='numRehetraLoadedCachedHTML';
-  try{
-    const cached=localStorage.getItem(CACHE_KEY);
-    if(cached && !sessionStorage.getItem(LOADED_KEY)){
-      sessionStorage.setItem(LOADED_KEY,'1');
-      document.open();
-      document.write(cached);
-      document.close();
-    }
-  }catch(e){ console.warn('Cache HTML:',e); }
-})();
-</script>
-
 <div class="side-overlay" id="sideOverlay"></div>
 <aside class="side-menu" id="sideMenu" aria-label="Menu principal">
   <div class="side-menu-head"><div><strong>Menu</strong><small>Fiangonana Ambodiadabo</small></div><button id="closeMenu" aria-label="Hidio">×</button></div>
@@ -1464,12 +1447,30 @@ function downloadUpdate(event) {
           throw new Error('index.html invalide');
         }
         localStorage.setItem(CACHE_KEY, html);
-        sessionStorage.setItem('numRehetraLoadedCachedHTML', '1');
         if (label) label.textContent = 'Mise à jour effectuée ✓';
         setTimeout(() => {
-          document.open();
-          document.write(html);
-          document.close();
+          // Aza mampiasa document.write(): mety hampiditra pejy indroa ao amin'ny WebView.
+          // Soloina mivantana ny document amin'ny version vaovao ary averina alefa ireo scripts inline.
+          try {
+            const parser = new DOMParser();
+            const parsed = parser.parseFromString(html, 'text/html');
+            if (!parsed.documentElement || !parsed.body) throw new Error('HTML tsy mety');
+
+            document.documentElement.replaceWith(parsed.documentElement.cloneNode(true));
+
+            // Re-run inline/external scripts satria tsy exécuté ny script rehefa cloneNode.
+            const scripts = Array.from(document.querySelectorAll('script'));
+            scripts.forEach(oldScript => {
+              const newScript = document.createElement('script');
+              for (const attr of oldScript.attributes) newScript.setAttribute(attr.name, attr.value);
+              newScript.textContent = oldScript.textContent;
+              oldScript.replaceWith(newScript);
+            });
+          } catch (e) {
+            console.error('Reload HTML:', e);
+            // Fallback: avereno ny pejy; ny version voatahiry dia mbola ao localStorage.
+            location.reload();
+          }
         }, 350);
       })
       .catch(err => {
