@@ -1,6 +1,27 @@
 <!DOCTYPE html>
 <html lang="mg">
 <head>
+
+<script>
+(function () {
+  try {
+    var lowEnd =
+      (navigator.deviceMemory && navigator.deviceMemory <= 2) ||
+      (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+
+    if (lowEnd) {
+      document.documentElement.classList.add('low-end-device');
+      var style = document.createElement('style');
+      style.textContent =
+        '.low-end-device *, .low-end-device *::before, .low-end-device *::after {' +
+        'animation-duration:0s !important; transition:none !important;}' +
+        '.low-end-device {scroll-behavior:auto !important;}';
+      document.head.appendChild(style);
+    }
+  } catch (e) {}
+})();
+</script>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -1296,6 +1317,72 @@ body.dark-mode{background:#050d19!important;color:#eef4ff!important}
 }
 </style>
 
+<style>
+/* VERSION 4 — compatibilité téléphones faibles */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  overflow-x: hidden;
+}
+img {
+  max-width: 100%;
+}
+button, input, select, textarea {
+  font: inherit;
+}
+button, a {
+  touch-action: manipulation;
+}
+@media (max-width: 480px) {
+  body {
+    font-size: 14px !important;
+  }
+  .container, main, .content, .app-container {
+    max-width: 100% !important;
+  }
+  .contact-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+</style>
+
+<style id="copy-number-style">
+.profile-number{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:10px !important;
+  flex-wrap:wrap !important;
+}
+.profile-phone-text{display:inline-flex;align-items:center;}
+.copy-number-btn{
+  border:0;
+  background:#eef2ff;
+  color:#2563eb;
+  font-size:13px;
+  font-weight:700;
+  padding:7px 11px;
+  border-radius:10px;
+  cursor:pointer;
+  transition:background .18s ease,color .18s ease,transform .12s ease;
+}
+.copy-number-btn:active{transform:scale(.96);}
+.copy-number-btn.copied{background:#2563eb;color:#fff;}
+body.dark-mode .copy-number-btn{background:#1e3a8a;color:#dbeafe;}
+body.dark-mode .copy-number-btn.copied{background:#3b82f6;color:#fff;}
+</style>
 </head>
 
 <body>
@@ -1399,6 +1486,8 @@ body.dark-mode{background:#050d19!important;color:#eef4ff!important}
             </select>
         </div>
     </div>
+
+    <div class="selection-toolbar" id="selectionToolbar" aria-hidden="true"><div class="selection-info"><div class="selection-count-wrap"><strong id="selectionCount">0</strong><span id="selectionCountLabel">contact sélectionné</span></div><span class="selection-subinfo" id="selectionSubInfo">Choisissez les contacts à sélectionner</span></div><div class="selection-actions"><button type="button" id="selectAllBtn" class="selection-btn secondary"><span id="selectAllLabel">Tout</span></button><button type="button" id="sendSmsBtn" class="selection-btn primary"><span class="btn-icon">💬</span><span>SMS</span></button><button type="button" id="cancelSelectionBtn" class="selection-btn cancel"><span class="btn-icon">×</span><span>Annuler</span></button></div></div>
 </div>
 
 <div class="results-info">
@@ -1994,7 +2083,33 @@ const favorites = new Set(JSON.parse(localStorage.getItem("favContacts") || "[]"
 function saveFavorites(){ localStorage.setItem("favContacts", JSON.stringify([...favorites])); updateFavoriteCount(); }
 function updateFavoriteCount(){ const el=document.getElementById("favoriteCount"); if(el) el.textContent=favorites.size; }
 function isFavorite(c){ return favorites.has(c.nom); }
-function toggleFavorite(name){ isFavorite({nom:name}) ? favorites.delete(name) : favorites.add(name); saveFavorites(); if(profilePage.classList.contains("open")){ const c=contacts.find(x=>x.nom===name); if(c) openProfile(c,false); } else displayContacts(); }
+let showingFavorites=false;
+function renderFavorites(){
+  showingFavorites=true;
+  search.value='';
+  categoryFilter.value='Tous';
+  categoryChips.querySelectorAll('.category-chip').forEach(c=>c.classList.toggle('active',c.dataset.category==='Tous'));
+  const fav=contacts.filter(c=>favorites.has(c.nom));
+  totalContacts.textContent=fav.length;
+  if(!fav.length){
+    contactsContainer.innerHTML='<div class="empty"><h3>Tsy mbola misy Favoris</h3><p>Tsindrio ★ amin’ny profil raha hampiditra olona.</p><button type="button" class="back-to-list-btn" onclick="displayContacts()">← Hiverina amin’ny liste</button></div>';
+    return;
+  }
+  contactsContainer.innerHTML=fav.map(c=>`<div class="card" onclick='openProfile(${JSON.stringify(c).replace(/</g,'\u003c')})'><img src="${c.photo}" class="photo" alt="${c.nom}" onerror="this.src='https://via.placeholder.com/150?text=Photo'"><div class="info"><div class="contact-top"><h2>${c.nom}</h2></div><div class="group">👥 ${c.groupe}</div></div></div>`).join('');
+}
+function toggleFavorite(name){
+  const removing=isFavorite({nom:name});
+  removing ? favorites.delete(name) : favorites.add(name);
+  saveFavorites();
+  if(profilePage.classList.contains("open")){
+    const c=contacts.find(x=>x.nom===name);
+    if(c) {
+      if(removing && showingFavorites){ closeProfile(); renderFavorites(); }
+      else openProfile(c,false);
+    }
+  } else if(showingFavorites) renderFavorites();
+  else displayContacts();
+}
 
 function saveContact(contact) {
     const phone = String(contact.numero || "").replace(/\s/g, "");
@@ -2021,6 +2136,27 @@ function saveContact(contact) {
     }
 }
 function phoneInfo(c){ const phone=String(c.numero||"").replace(/\s/g,""); return {phone,hasPhone:phone!=="",international:phone.startsWith("0")?"261"+phone.substring(1):phone}; }
+async function copyPhoneNumber(phone){
+  const value=String(phone||'').replace(/\s/g,'');
+  if(!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch(e) {
+    const ta=document.createElement('textarea');
+    ta.value=value; ta.setAttribute('readonly','');
+    ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(_) {}
+    ta.remove();
+  }
+  const btn=document.querySelector('.copy-number-btn');
+  if(btn){
+    const old=btn.textContent;
+    btn.textContent='Copié ✓';
+    btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent=old;btn.classList.remove('copied');},1400);
+  }
+}
 function openProfile(contact, push=true){
   const {phone,hasPhone,international}=phoneInfo(contact);
   profileContent.innerHTML=`
@@ -2030,7 +2166,7 @@ function openProfile(contact, push=true){
       <h1>${contact.nom}</h1>
       <div class="profile-group">👥 ${contact.groupe}</div>
       ${contact.categorie?.length ? `<div class="profile-cats">${contact.categorie.map(x=>`<span>${x}</span>`).join('')}</div>` : ''}
-      <div class="profile-number">${hasPhone ? '📞 '+contact.numero : 'Mbola tsy tafiditra ny Numéro'}</div>
+      <div class="profile-number">${hasPhone ? '<span class="profile-phone-text">📞 '+contact.numero+'</span><button class="copy-number-btn" type="button" onclick=\'copyPhoneNumber("'+phone+'")\' aria-label="Copier le numéro">Copier</button>' : 'Mbola tsy tafiditra ny Numéro'}</div>
       <div class="profile-actions">
         <a href="${hasPhone?'tel:'+phone:'#'}" class="action call ${hasPhone?'':'disabled-action'}">📞<span>Appel</span></a>
         <a href="${hasPhone?'sms:'+phone:'#'}" class="action sms ${hasPhone?'':'disabled-action'}">💬<span>Message</span></a>
@@ -2045,32 +2181,33 @@ function openProfile(contact, push=true){
   if(push) history.pushState({profile:contact.nom},'', '#contact-'+encodeURIComponent(contact.nom));
 }
 function closeProfile(){ profilePage.classList.remove('open'); profilePage.setAttribute('aria-hidden','true'); document.body.classList.remove('profile-open'); if(location.hash.startsWith('#contact-')) history.back(); }
+let selectionMode=false;
+const selectedContacts=new Set();
+function updateSelectionUI(){const t=document.getElementById('selectionToolbar'),n=document.getElementById('selectionCount'),label=document.getElementById('selectionCountLabel'),sub=document.getElementById('selectionSubInfo'),b=document.getElementById('sendSmsBtn'),allBtn=document.getElementById('selectAllBtn'),allLabel=document.getElementById('selectAllLabel');const count=selectedContacts.size;const showToolbar=selectionMode&&count>0;if(t){t.classList.toggle('show',showToolbar);t.setAttribute('aria-hidden',showToolbar?'false':'true')}if(n)n.textContent=count;if(label)label.textContent=count===1?'contact sélectionné':'contacts sélectionnés';if(sub){const visible=getVisibleContactsForSelection();const withPhone=[...selectedContacts].map(n=>contacts.find(c=>c.nom===n)).filter(c=>c&&String(c.numero||'').trim()).length;sub.textContent=count===0?'':`${withPhone} avec numéro · ${visible.length} affiché${visible.length>1?'s':''}`}if(b){b.disabled=count===0;b.title=count?`Envoyer un SMS à ${count} contact${count>1?'s':''}`:'Sélectionnez au moins un contact'}if(allBtn&&allLabel){const visible=getVisibleContactsForSelection();const all=visible.length>0&&visible.every(c=>selectedContacts.has(c.nom));allLabel.textContent=all?'Désélectionner':'Tout sélectionner';allBtn.classList.toggle('is-all',all);allBtn.setAttribute('aria-pressed',all?'true':'false');}} 
+function getVisibleContactsForSelection(){let result=[...contacts],text=search.value.toLowerCase().trim(),group=groupFilter.value,category=categoryFilter.value;if(text)result=result.filter(c=>c.nom.toLowerCase().includes(text));if(group!=="Tous")result=result.filter(c=>c.groupe===group);if(category!=="Tous")result=result.filter(c=>Array.isArray(c.categorie)?c.categorie.includes(category):c.categorie===category);return result;}
+function toggleSelection(c,e){if(e)e.stopPropagation();if(selectedContacts.has(c.nom)){selectedContacts.delete(c.nom);}else{selectedContacts.add(c.nom);}if(selectedContacts.size===0){cancelSelection();return;}displayContacts();}
+function renderContactCards(result){contactsContainer.innerHTML=result.map(c=>{const sel=selectedContacts.has(c.nom),safe=JSON.stringify(c).replace(/</g,'\u003c'),name=String(c.nom).replace(/"/g,'&quot;');return `<div class="card ${selectionMode?'selectable':''} ${sel?'selected':''}" data-name="${name}" onclick='${selectionMode?`toggleSelection(${safe},event)`: `openProfile(${safe})`}'>` + `<img src="${c.photo}" alt="${c.nom}" class="photo" onerror="this.src='https://via.placeholder.com/150?text=Photo'">` + `<div class="info"><div class="contact-top"><h2>${c.nom}</h2></div><div class="group">👥 ${c.groupe}</div></div></div>`}).join('');}
 function displayContacts(){
- let result=[...contacts], text=search.value.toLowerCase().trim(), group=groupFilter.value, category=categoryFilter.value;
- if(text) result=result.filter(c=>c.nom.toLowerCase().includes(text));
- if(group!=="Tous") result=result.filter(c=>c.groupe===group);
- if(category!=="Tous") result=result.filter(c=>Array.isArray(c.categorie)?c.categorie.includes(category):c.categorie===category);
- result.sort((a,b)=>sort.value==='az'?a.nom.localeCompare(b.nom):b.nom.localeCompare(a.nom));
- totalContacts.textContent=result.length; if(resultLabel) resultLabel.textContent=result.length;
- if(!result.length){contactsContainer.innerHTML='<div class="empty"><h3>Tsy misy contact</h3><p>Tsy nahitana olona mifanaraka.</p></div>';return;}
- contactsContainer.innerHTML=result.map(c=>`<div class="card" onclick='openProfile(${JSON.stringify(c).replace(/</g,'\\u003c')})'>
-   <img src="${c.photo}" alt="${c.nom}" class="photo" onerror="this.src='https://via.placeholder.com/150?text=Photo'">
-   <div class="info"><div class="contact-top"><h2>${c.nom}</h2></div>
-   <div class="group">👥 ${c.groupe}</div></div></div>`).join('');
-}
+ showingFavorites=false;
+ let result=[...contacts],text=search.value.toLowerCase().trim(),group=groupFilter.value,category=categoryFilter.value;
+ if(text)result=result.filter(c=>c.nom.toLowerCase().includes(text));if(group!=="Tous")result=result.filter(c=>c.groupe===group);if(category!=="Tous")result=result.filter(c=>Array.isArray(c.categorie)?c.categorie.includes(category):c.categorie===category);result.sort((a,b)=>sort.value==='az'?a.nom.localeCompare(b.nom):b.nom.localeCompare(a.nom));totalContacts.textContent=result.length;if(resultLabel)resultLabel.textContent=result.length;if(!result.length){contactsContainer.innerHTML='<div class="empty"><h3>Tsy misy contact</h3><p>Tsy nahitana olona mifanaraka.</p></div>';updateSelectionUI();return;}renderContactCards(result);updateSelectionUI();}
+function startSelection(){selectionMode=true;selectedContacts.clear();displayContacts();updateSelectionUI();}
+function cancelSelection(){selectionMode=false;selectedContacts.clear();displayContacts();updateSelectionUI();}
+function selectAllVisible(){if(!selectionMode)return;const result=getVisibleContactsForSelection();if(!result.length)return;const all=result.every(c=>selectedContacts.has(c.nom));result.forEach(c=>all?selectedContacts.delete(c.nom):selectedContacts.add(c.nom));if(selectedContacts.size===0){cancelSelection();return;}displayContacts();updateSelectionUI();}
+function sendSelectedSMS(){const phones=[...selectedContacts].map(n=>contacts.find(c=>c.nom===n)).filter(c=>c&&String(c.numero||'').trim()).map(c=>String(c.numero).replace(/\s/g,''));if(!phones.length){alert('Tsy misy contact voafantina manana numéro.');return;}window.location.href='sms:'+phones.join(',');}
 search.addEventListener('input',()=>{searchClear.classList.toggle('show',search.value.trim()!=='');displayContacts();});
 searchClear.addEventListener('click',()=>{search.value='';searchClear.classList.remove('show');search.focus();displayContacts();});
 groupFilter.addEventListener('change',displayContacts); sort.addEventListener('change',displayContacts); categoryFilter.addEventListener('change',()=>{categoryChips.querySelectorAll('.category-chip').forEach(c=>c.classList.toggle('active',c.dataset.category===categoryFilter.value));displayContacts();});
 categoryChips.addEventListener('click',e=>{const chip=e.target.closest('.category-chip');if(!chip)return;categoryFilter.value=chip.dataset.category;categoryChips.querySelectorAll('.category-chip').forEach(c=>c.classList.remove('active'));chip.classList.add('active');displayContacts();});
 
-document.getElementById('profileBack').addEventListener('click',closeProfile);
+const startSelectionBtn=document.getElementById('startSelectionBtn');if(startSelectionBtn)startSelectionBtn.addEventListener('click',startSelection);const cancelSelectionBtn=document.getElementById('cancelSelectionBtn');if(cancelSelectionBtn)cancelSelectionBtn.addEventListener('click',cancelSelection);const selectAllBtn=document.getElementById('selectAllBtn');if(selectAllBtn)selectAllBtn.addEventListener('click',selectAllVisible);const sendSmsBtn=document.getElementById('sendSmsBtn');if(sendSmsBtn)sendSmsBtn.addEventListener('click',sendSelectedSMS);document.getElementById('profileBack').addEventListener('click',closeProfile);
 window.addEventListener('popstate',()=>{if(profilePage.classList.contains('open')){profilePage.classList.remove('open');document.body.classList.remove('profile-open');}});
 
 const sideMenu=document.getElementById('sideMenu'), sideOverlay=document.getElementById('sideOverlay');
 function openMenu(){sideMenu.classList.add('open');sideOverlay.classList.add('open');}
 function closeMenu(){sideMenu.classList.remove('open');sideOverlay.classList.remove('open');}
 document.getElementById('menuToggle').addEventListener('click',openMenu);document.getElementById('closeMenu').addEventListener('click',closeMenu);sideOverlay.addEventListener('click',closeMenu);
-document.getElementById('menuFavorites').addEventListener('click',()=>{closeMenu();search.value='';categoryFilter.value='Tous';categoryChips.querySelectorAll('.category-chip').forEach(c=>c.classList.toggle('active',c.dataset.category==='Tous'));contactsContainer.innerHTML='';let fav=contacts.filter(c=>favorites.has(c.nom));totalContacts.textContent=fav.length;if(!fav.length){contactsContainer.innerHTML='<div class="empty"><h3>Tsy mbola misy Favoris</h3><p>Tsindrio ★ amin’ny profil raha hampiditra olona.</p></div>';return;}contactsContainer.innerHTML=fav.map(c=>`<div class="card" onclick='openProfile(${JSON.stringify(c).replace(/</g,'\\u003c')})'><img src="${c.photo}" class="photo" alt="${c.nom}" onerror="this.src='https://via.placeholder.com/150?text=Photo'"><div class="info"><div class="contact-top"><h2>${c.nom}</h2></div><div class="group">👥 ${c.groupe}</div></div></div>`).join('');});
+document.getElementById('menuFavorites').addEventListener('click',()=>{closeMenu();renderFavorites();});
 document.getElementById('menuUpdate').addEventListener('click',()=>{closeMenu();const u=document.querySelector('.update-button');if(u)u.click();});
 function applyDarkMode(dark){
   document.body.classList.toggle('dark-mode',dark);
@@ -2095,6 +2232,12 @@ updateFavoriteCount();displayContacts();
 const backToTop=document.getElementById('backToTop'); if(backToTop){window.addEventListener('scroll',()=>backToTop.classList.toggle('show',window.scrollY>400));backToTop.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));}
 </script>
 
+
+<style id="favorites-empty-button-style">
+.back-to-list-btn{margin-top:16px;border:0;border-radius:12px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;background:#2563eb;color:#fff;box-shadow:0 3px 10px rgba(37,99,235,.18);}
+.back-to-list-btn:active{transform:scale(.98);}
+body.dark-mode .back-to-list-btn{background:#3b82f6;color:#fff;}
+</style>
 
 <style id="final-day-category-style">
 /* Mode jour — catégorie sélectionnée */
@@ -2124,5 +2267,249 @@ body:not(.dark-mode) .category-chip.active:focus {
   document.addEventListener('DOMContentLoaded', syncCategoryChip);
 })();
 </script>
+<style id="professional-selection-style">.results-info{position:relative;display:flex;align-items:center;gap:8px}.start-selection{margin-left:auto;border:0;border-radius:999px;padding:8px 13px;font-weight:700;font-size:12px;cursor:pointer;background:rgba(37,99,235,.1);color:#2563eb}.selection-toolbar{display:none;position:sticky;top:8px;z-index:20;margin:10px 0 12px;padding:10px 11px;border-radius:18px;align-items:center;gap:10px;background:rgba(255,255,255,.96);border:1px solid rgba(37,99,235,.16);box-shadow:0 10px 28px rgba(15,23,42,.1);backdrop-filter:blur(12px)}.selection-toolbar.show{display:flex}.selection-info{display:flex;align-items:baseline;gap:5px;min-width:88px;flex:1}.selection-info strong{font-size:20px;color:#2563eb;line-height:1}.selection-info span{font-size:11px;font-weight:600;opacity:.7}.selection-actions{display:flex;gap:6px;align-items:center}.selection-btn{border:0;border-radius:12px;padding:9px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}.selection-btn.primary{background:#2563eb;color:#fff;box-shadow:0 5px 12px rgba(37,99,235,.22)}.selection-btn.primary:disabled{opacity:.42;box-shadow:none}.selection-btn.secondary{background:rgba(37,99,235,.09);color:#2563eb}.selection-btn.cancel{background:rgba(100,116,139,.1);color:#475569}.card.selectable{position:relative;cursor:pointer;padding-left:58px}.card.selectable.selected{outline:2px solid rgba(37,99,235,.24);background:rgba(37,99,235,.055)}.contact-check{position:absolute;left:16px;top:50%;transform:translateY(-50%);width:28px;height:28px;display:grid;place-items:center;cursor:pointer;z-index:2}.contact-check input{position:absolute;opacity:0;width:1px;height:1px}.contact-check span{width:22px;height:22px;border-radius:7px;border:2px solid #cbd5e1;background:#fff;display:block}.contact-check input:checked+span{background:#2563eb;border-color:#2563eb;box-shadow:0 4px 10px rgba(37,99,235,.22)}.contact-check input:checked+span:after{content:'✓';display:block;color:#fff;font-size:14px;font-weight:900;text-align:center;line-height:18px}.selection-mark{position:absolute;right:15px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:900;color:#fff;background:#2563eb}body.dark-mode .selection-toolbar{background:rgba(18,24,38,.96);border-color:rgba(96,165,250,.18)}body.dark-mode .start-selection{background:rgba(96,165,250,.14);color:#93c5fd}body.dark-mode .selection-btn.secondary{background:rgba(96,165,250,.14);color:#93c5fd}body.dark-mode .selection-btn.cancel{background:rgba(148,163,184,.12);color:#cbd5e1}body.dark-mode .contact-check span{background:#1e293b;border-color:#475569}@media(max-width:520px){.selection-toolbar{align-items:stretch;flex-wrap:wrap}.selection-info{flex:0 0 100%}.selection-actions{width:100%}.selection-btn{flex:1;padding:10px 7px}.card.selectable{padding-left:54px}}</style>
+
+<style id="longpress-sticky-selection">
+/* Sélection par appui long + en-tête de liste qui reste visible */
+.results-info{
+  position:sticky!important;
+  top:0!important;
+  z-index:850!important;
+  background:rgba(241,245,249,.94)!important;
+  backdrop-filter:blur(12px)!important;
+  -webkit-backdrop-filter:blur(12px)!important;
+  padding:8px 5px!important;
+  margin:0 0 8px!important;
+  border-bottom:1px solid rgba(148,163,184,.16)!important;
+}
+body.dark-mode .results-info{
+  background:rgba(5,13,25,.94)!important;
+  border-bottom-color:rgba(96,165,250,.12)!important;
+}
+.card.selectable{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
+.card.long-pressing{transform:scale(.985)!important;box-shadow:0 0 0 2px rgba(37,99,235,.18),0 8px 22px rgba(37,99,235,.12)!important;}
+.longpress-hint{font-size:10px;color:#64748b;margin-left:6px;white-space:nowrap;}
+body.dark-mode .longpress-hint{color:#94a3b8}
+@media(max-width:600px){
+  .results-info{padding:7px 3px!important;}
+}
+</style>
+
+
+<script id="longpress-selection-script">
+(function(){
+  const list=document.getElementById('contacts');
+  if(!list) return;
+  let pressTimer=null;
+  let pressCard=null;
+  let longPressTriggered=false;
+  let startX=0,startY=0;
+  const LONG_PRESS_MS=560;
+  const MOVE_LIMIT=12;
+
+  function clearPress(){
+    if(pressTimer){clearTimeout(pressTimer);pressTimer=null;}
+    if(pressCard){pressCard.classList.remove('long-pressing');pressCard=null;}
+  }
+
+  function selectByLongPress(card){
+    const name=card && card.dataset ? card.dataset.name : '';
+    const contact=contacts.find(c=>c.nom===name);
+    if(!contact) return;
+    longPressTriggered=true;
+    selectionMode=true;
+    selectedContacts.add(contact.nom);
+    clearPress();
+    displayContacts();
+    updateSelectionUI();
+    if(navigator.vibrate) navigator.vibrate(25);
+  }
+
+  list.addEventListener('pointerdown',function(e){
+    if(selectionMode) return;
+    if(e.pointerType==='mouse' && e.button!==0) return;
+    const card=e.target.closest('.card');
+    if(!card || !list.contains(card) || card.classList.contains('empty')) return;
+    pressCard=card;
+    longPressTriggered=false;
+    startX=e.clientX; startY=e.clientY;
+    card.classList.add('long-pressing');
+    pressTimer=setTimeout(function(){selectByLongPress(card);},LONG_PRESS_MS);
+  },{passive:true});
+
+  list.addEventListener('pointermove',function(e){
+    if(!pressTimer) return;
+    if(Math.abs(e.clientX-startX)>MOVE_LIMIT || Math.abs(e.clientY-startY)>MOVE_LIMIT) clearPress();
+  },{passive:true});
+
+  list.addEventListener('pointerup',function(){clearPress();},{passive:true});
+  list.addEventListener('pointercancel',clearPress,{passive:true});
+  list.addEventListener('pointerleave',function(e){
+    if(e.pointerType==='mouse') clearPress();
+  },{passive:true});
+
+  list.addEventListener('click',function(e){
+    if(longPressTriggered){
+      e.preventDefault();
+      e.stopPropagation();
+      longPressTriggered=false;
+    }
+  },true);
+})();
+</script>
+
+
+<style id="selection-toolbar-fixed-with-filters">
+/* Toolbar selection: fixe avec la zone Catégorie + filtres */
+.search-area .selection-toolbar{
+  position:static!important;
+  top:auto!important;
+  z-index:auto!important;
+  margin:9px 0 0!important;
+  width:100%!important;
+}
+@media(max-width:700px){
+  .search-area .selection-toolbar{margin:8px 0 0!important;}
+}
+body.dark-mode .search-area .selection-toolbar{
+  background:rgba(18,24,38,.96)!important;
+}
+</style>
 </body>
+
+<style id="final-selection-ui">
+/* FINAL — toolbar fixe comme les catégories + états bleus */
+.search-area .selection-toolbar{
+  position:sticky!important;
+  top:0!important;
+  z-index:910!important;
+  margin:8px 0 0!important;
+  width:100%!important;
+  background:rgba(238,243,249,.94)!important;
+  backdrop-filter:blur(14px)!important;
+  -webkit-backdrop-filter:blur(14px)!important;
+}
+/* Le bouton Sélectionner devient bleu tant que le mode sélection est actif */
+body.selection-active #startSelectionBtn,
+.start-selection.selection-active{
+  background:#2563eb!important;
+  color:#fff!important;
+  border-color:#2563eb!important;
+  box-shadow:0 6px 18px rgba(37,99,235,.24)!important;
+}
+/* Tout sélectionner / Désélectionner devient bleu quand il est dans l'état actif */
+.selection-btn.secondary.is-all,
+.selection-btn.secondary.active{
+  background:#2563eb!important;
+  color:#fff!important;
+  border-color:#2563eb!important;
+  box-shadow:0 6px 18px rgba(37,99,235,.24)!important;
+}
+/* Aucun symbole ☑ sur les boutons */
+.start-selection:before{content:none!important;display:none!important;}
+.selection-btn.secondary .btn-icon{display:none!important;}
+/* Le bouton SMS reste bleu uniquement lorsqu'il est utilisable */
+.selection-btn.primary:not(:disabled){background:#2563eb!important;color:#fff!important;}
+body.dark-mode .search-area .selection-toolbar{
+  background:rgba(5,13,25,.94)!important;
+}
+@media(max-width:700px){
+  .search-area .selection-toolbar{top:0!important;margin:7px 0 0!important;}
+}
+</style>
+
+<script id="final-selection-state">
+(function(){
+  const start=document.getElementById('startSelectionBtn');
+  const all=document.getElementById('selectAllBtn');
+  if(!start) return;
+  function setStart(active){
+    start.classList.toggle('selection-active',!!active);
+  }
+  document.addEventListener('click',function(e){
+    const t=e.target.closest('#startSelectionBtn,#cancelSelectionBtn,#selectAllBtn');
+    if(!t) return;
+    setTimeout(function(){
+      const toolbar=document.getElementById('selectionToolbar');
+      const active=toolbar && toolbar.classList.contains('show');
+      setStart(active);
+      if(all){
+        const label=document.getElementById('selectAllLabel');
+        all.classList.toggle('active',!!(label && label.textContent.trim()==='Désélectionner'));
+      }
+    },20);
+  },true);
+})();
+</script>
+
 </html>
+
+<style id="selection-polish-v2">.selection-toolbar{padding:9px 10px;gap:10px;border-radius:20px;box-shadow:0 8px 24px rgba(15,23,42,.10)}.selection-info{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px}.selection-count-wrap{display:flex;align-items:baseline;gap:5px}.selection-count-wrap strong{font-size:19px;font-variant-numeric:tabular-nums}.selection-count-wrap span{font-size:11px;font-weight:750}.selection-subinfo{font-size:9.5px;opacity:.58;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}.selection-actions{gap:5px}.selection-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:38px;padding:8px 11px;border-radius:13px;font-size:10.5px;letter-spacing:.1px;transition:transform .12s ease,background .15s ease,box-shadow .15s ease}.selection-btn:active{transform:scale(.96)}.selection-btn .btn-icon{font-size:14px;line-height:1}.selection-btn.secondary.is-all{background:rgba(37,99,235,.16);box-shadow:inset 0 0 0 1px rgba(37,99,235,.08)}.selection-btn.primary:not(:disabled){box-shadow:0 5px 14px rgba(37,99,235,.20)}.selection-btn.primary:disabled{filter:grayscale(.25);cursor:not-allowed}.start-selection{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;min-height:38px;box-shadow:0 4px 12px rgba(37,99,235,.08)}.start-selection:before{content:'☑';font-size:14px}.start-selection:active{transform:scale(.97)}.card.selectable{padding-left:58px;transition:background .14s ease,outline-color .14s ease}.card.selectable.selected{outline:2px solid rgba(37,99,235,.28);box-shadow:0 5px 18px rgba(37,99,235,.08)}.contact-check span{transition:transform .14s ease,background .14s ease,border-color .14s ease}.contact-check input:checked+span{transform:scale(1.04)}.selection-mark{box-shadow:0 3px 9px rgba(37,99,235,.22)}body.dark-mode .selection-toolbar{box-shadow:0 8px 24px rgba(0,0,0,.25)}@media(max-width:520px){.selection-toolbar{margin:8px 0 10px;padding:9px;border-radius:17px}.selection-actions{gap:5px}.selection-btn{min-height:40px;padding:9px 6px}.selection-btn .btn-icon{font-size:13px}.selection-subinfo{max-width:145px}.start-selection{padding:8px 12px}}</style>
+<style id="google-messages-selection-style">
+.start-selection:before{content:none!important;display:none!important}
+.card.selectable{padding-left:18px!important}
+.card.selectable .photo-select{position:relative;width:122px;height:122px;flex:0 0 122px;border-radius:24px;overflow:hidden}
+.card.selectable .photo-select .photo{width:100%;height:100%;display:block;object-fit:cover}
+.card.selectable .photo-select.is-selected:after{content:"";position:absolute;inset:0;background:rgba(37,99,235,.58);z-index:2}
+.photo-selected-check{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;width:43px;height:43px;border-radius:50%;display:grid;place-items:center;background:#2563eb;color:#fff;font-size:27px;font-weight:900;line-height:1;box-shadow:0 3px 10px rgba(0,0,0,.20);border:3px solid #fff}
+.card.selectable.selected{outline:none!important;border:2px solid #2563eb!important;box-shadow:0 6px 20px rgba(37,99,235,.16),0 0 0 2px rgba(37,99,235,.10)!important}
+.contact-check,.selection-mark{display:none!important}
+@media(max-width:520px){.card.selectable{padding-left:14px!important}.card.selectable .photo-select{width:122px;height:122px;flex-basis:122px;border-radius:23px}.photo-selected-check{width:42px;height:42px;font-size:26px}}
+</style>
+
+<style id="selection-final-contour">
+/* Sélection: contour bleu, sans bouton Sélectionner */
+.card.selectable.selected{
+  border:2px solid #2563eb!important;
+  outline:none!important;
+  box-shadow:0 6px 20px rgba(37,99,235,.16),0 0 0 2px rgba(37,99,235,.10)!important;
+}
+</style>
+
+<style id="selection-v1-final">
+/* V1 — sélection : overlay sur toute la carte, sans aucune icône, sans changement de taille. */
+.card.selectable{
+  position:relative!important;
+  cursor:pointer!important;
+  user-select:none!important;
+  -webkit-user-select:none!important;
+  -webkit-touch-callout:none!important;
+}
+.card.selectable.selected{
+  border:2px solid #2563eb!important;
+  outline:none!important;
+  box-shadow:0 5px 18px rgba(37,99,235,.16)!important;
+}
+.card.selectable.selected::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:1;
+  pointer-events:none;
+  background:rgba(37,99,235,.17);
+  border-radius:inherit;
+}
+.card.selectable > .photo,
+.card.selectable > .info{
+  position:relative!important;
+  z-index:2!important;
+}
+/* Disable every old selection mark/overlay rule. */
+.card.selectable .photo-select,
+.card.selectable .photo-selected-check,
+.card.selectable .contact-check,
+.card.selectable .selection-mark{display:none!important;}
+.card.selectable .photo-select.is-selected::after{display:none!important;content:none!important;}
+/* Restore the original contact image dimensions. */
+.card.selectable > .photo{
+  width:74px!important;
+  height:74px!important;
+  flex:0 0 74px!important;
+  border-radius:17px!important;
+}
+.card.long-pressing{transform:none!important;}
+/* The action bar disappears automatically when selection count reaches zero. */
+.selection-toolbar:not(.show){display:none!important;}
+.selection-toolbar.show{display:flex!important;}
+</style>
+
